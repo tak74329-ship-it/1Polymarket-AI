@@ -29,3 +29,4 @@ database/pg_hba.conf
 database/pg_ident.conf
 database/postgresql.auto.conf
 database/postgresql.conf
+database/PG_VERSION
