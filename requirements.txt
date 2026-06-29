@@ -1,0 +1,10 @@
+requests
+python-dotenv
+psycopg2-binary
+redis
+pandas
+sqlalchemy
+fastapi
+uvicorn
+apscheduler
+feedparser
