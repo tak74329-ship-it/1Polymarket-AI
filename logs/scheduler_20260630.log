@@ -1,0 +1,25 @@
+2026-06-30 09:40:49 | INFO  | ============================================================
+2026-06-30 09:40:49 | INFO  | 🏁  MARKET PIPELINE START
+2026-06-30 09:40:49 | INFO  | ============================================================
+2026-06-30 09:40:49 | INFO  | ▶️  Collector (attempt 1/3)
+2026-06-30 09:40:52 | INFO  | ✅  Collector finished: {'errors': 0}
+2026-06-30 09:40:52 | INFO  | 
+2026-06-30 09:40:52 | INFO  | ▶️  OrderBook (attempt 1/3)
+2026-06-30 09:40:57 | INFO  | ✅  OrderBook finished: {'errors': 0}
+2026-06-30 09:40:57 | INFO  | 
+2026-06-30 09:40:57 | INFO  | ▶️  Signals (attempt 1/3)
+2026-06-30 09:41:00 | INFO  | ✅  Signals finished: {'total_tested': 50, 'buy_signals': 0, 'sell_signals': 0, 'watch_signals': 50, 'errors': 0}
+2026-06-30 09:41:00 | INFO  | 
+2026-06-30 09:41:00 | INFO  | ▶️  Features (attempt 1/3)
+2026-06-30 09:41:02 | INFO  | ✅  Features finished: {'errors': 0}
+2026-06-30 09:41:02 | INFO  | 
+2026-06-30 09:41:02 | INFO  | ▶️  AI Engine (attempt 1/3)
+2026-06-30 09:41:02 | INFO  | ✅  AI Engine finished: {'tested': 13, 'buy': 5, 'watch': 8, 'skip': 0, 'errors': 0}
+2026-06-30 09:41:02 | INFO  | 
+2026-06-30 09:41:02 | INFO  | ▶️  Paper Trader (attempt 1/3)
+2026-06-30 09:41:02 | INFO  | ✅  Paper Trader finished: {'closed': 0, 'ai_buy_count': 5, 'skipped_not_buy': 9, 'skipped_duplicate': 4, 'skipped_max_positions': 0, 'skipped_low_confidence': 0, 'opened': 1, 'errors': 0}
+2026-06-30 09:41:02 | INFO  | 
+2026-06-30 09:41:02 | INFO  | ============================================================
+2026-06-30 09:41:02 | INFO  | 🏁  MARKET PIPELINE END
+2026-06-30 09:41:02 | INFO  | ============================================================
+2026-06-30 09:41:02 | INFO  | 🔁  Dashboard data refreshed
