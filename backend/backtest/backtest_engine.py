@@ -27,7 +27,7 @@ def run(limit=100):
             mf.market_id,
             m.question,
             (mf.feature_json->>'latest_yes_price')::numeric AS yes_price,
-            (mf.feature_json->>'signal_score')::numeric AS signal_score,
+            (mf.feature_json->>'latest_signal_score')::numeric AS signal_score,
             (mf.feature_json->>'news_score')::numeric AS news_score,
             (mf.feature_json->>'orderbook_imbalance')::numeric AS imbalance
         FROM market_features mf
@@ -42,7 +42,12 @@ def run(limit=100):
     rows = cur.fetchall()
 
     candidates = []
-    for market_id, question, yes_price, signal_score, news_score, imbalance in rows:
+    for row in rows:
+        market_id, question, yes_price, signal_score, news_score, imbalance = row
+        yes_price = f(yes_price)
+        signal_score = f(signal_score)
+        news_score = f(news_score)
+        imbalance = f(imbalance)
         yes_price = f(yes_price)
         signal_score = f(signal_score)
         news_score = f(news_score)

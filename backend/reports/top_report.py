@@ -39,7 +39,7 @@ def run():
             mf.market_id,
             m.question,
             mf.feature_json->>'latest_yes_price' AS yes_price,
-            mf.feature_json->>'signal_score' AS signal_score,
+            mf.feature_json->>'latest_signal_score' AS signal_score,
             mf.feature_json->>'news_score' AS news_score,
             mf.feature_json->>'orderbook_imbalance' AS imbalance,
             mf.created_at
