@@ -6,6 +6,7 @@ from backend.jobs.collector_job import run as collector_job
 from backend.jobs.signal_job import run as signal_job
 from backend.jobs.orderbook_job import run as orderbook_job
 from backend.jobs.news_job import run as news_job
+from backend.jobs.market_keyword_job import run as market_keyword_job
 from backend.jobs.news_market_match_job import run as news_match_job
 from backend.jobs.news_signal_job import run as news_signal_job
 from backend.jobs.feature_job import run as feature_job
@@ -33,6 +34,7 @@ def market_pipeline():
 
 
 def news_pipeline():
+    safe_run("Market Keyword Job", market_keyword_job)
     safe_run("News Job", news_job)
     safe_run("News Match Job", news_match_job)
     safe_run("News Signal Job", news_signal_job)
