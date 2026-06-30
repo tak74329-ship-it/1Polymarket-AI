@@ -1,4 +1,4 @@
-"""Scheduler V2 — auto-run the complete pipeline every 5 minutes with logging & retry."""
+"""Scheduler V2 — auto-run the complete pipeline with config-driven intervals."""
 
 import os
 import sys
@@ -8,6 +8,10 @@ import logging
 import traceback
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
+
+from backend.utils.config import load_trading_config
+
+CFG = load_trading_config()
 
 # ── Job imports (unchanged) ──────────────────────────────────────────
 from backend.jobs.collector_job import run as collector_job
@@ -40,8 +44,8 @@ log = logging.getLogger("scheduler_v2")
 
 MAX_RETRIES = 2
 RETRY_DELAY_SEC = 30
-PIPELINE_INTERVAL_MINUTES = 5
-NEWS_INTERVAL_MINUTES = 30
+PIPELINE_INTERVAL_MINUTES = CFG.get("scheduler_market_interval_minutes", 5)
+NEWS_INTERVAL_MINUTES = CFG.get("scheduler_news_interval_minutes", 30)
 
 
 def safe_run(name: str, func, *args, **kwargs) -> dict:

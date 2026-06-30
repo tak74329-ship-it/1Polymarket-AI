@@ -1,13 +1,19 @@
 import traceback
 import psycopg2
 from psycopg2.extras import Json
-from backend.utils.config import DB_CONFIG
+from backend.utils.config import DB_CONFIG, load_trading_config
+from backend.risk.risk_manager import RiskManager, detect_theme
 
-START_CASH = 10000
-TRADE_AMOUNT = 100
-TAKE_PROFIT = 0.20
-STOP_LOSS = -0.08
-MAX_OPEN_POSITIONS = 5
+CFG = load_trading_config()
+
+START_CASH = CFG["start_cash"]
+TRADE_AMOUNT = CFG["trade_amount"]
+TAKE_PROFIT = CFG["take_profit_pct"]
+STOP_LOSS = CFG["stop_loss_pct"]
+MAX_OPEN_POSITIONS = CFG["max_open_positions"]
+PAPER_MODE = CFG["paper_mode"]
+MAX_EXPOSURE_PCT = CFG["max_exposure_pct"]
+MAX_PER_THEME = CFG["max_positions_per_theme"]
 
 
 def f(v):
@@ -163,38 +169,72 @@ def run():
         # Count current open positions
         current_open = count_open_positions(cur)
 
+        # Load portfolio for risk checks
+        cur.execute("SELECT cash FROM paper_balance ORDER BY id DESC LIMIT 1")
+        cash_bal = float(cur.fetchone()[0] or 0)
+        cur.execute("SELECT COALESCE(SUM(invested), 0) FROM paper_positions WHERE status='OPEN'")
+        total_invested = float(cur.fetchone()[0] or 0)
+        total_asset = cash_bal + total_invested
+
+        risk_mgr = RiskManager()
+
         # Stats
         ai_buy_count = 0
         skipped_not_buy = 0
         skipped_duplicate = 0
         skipped_max_positions = 0
         skipped_low_confidence = 0
+        skipped_risk_block = 0
+        skipped_theme_block = 0
         opened = 0
 
         for market_id, probability, confidence, ai_action, reason in rows:
             probability = f(probability)
             confidence = f(confidence)
 
-            # Primary gate: AI action must be BUY
             if ai_action != "BUY":
                 skipped_not_buy += 1
                 continue
 
             ai_buy_count += 1
 
-            # Secondary gate: confidence sanity check
             if confidence < 60 or probability < 50:
                 skipped_low_confidence += 1
                 continue
 
-            # No duplicate positions
             if already_open(cur, market_id):
                 skipped_duplicate += 1
                 continue
 
-            # Max positions cap
+            # ── Risk manager checks ──────────────────────────────────
             if current_open + opened >= MAX_OPEN_POSITIONS:
                 skipped_max_positions += 1
+                continue
+
+            # Get market question for theme check
+            cur.execute("SELECT question FROM markets WHERE market_id = %s", (market_id,))
+            mq_row = cur.fetchone()
+            question = mq_row[0] if mq_row else ""
+
+            # Check all risk gates
+            risk_blocked = False
+
+            # Exposure check
+            new_asset = cash_bal - (TRADE_AMOUNT * (opened + 1))
+            new_invested = total_invested + (TRADE_AMOUNT * (opened + 1))
+            ok, reason_r = risk_mgr.check_exposure(new_invested, new_asset + new_invested)
+            if not ok:
+                skipped_risk_block += 1
+                risk_blocked = True
+
+            # Theme duplicate check
+            if not risk_blocked and question:
+                ok, reason_t = risk_mgr.check_duplicate_theme(question, cur)
+                if not ok:
+                    skipped_theme_block += 1
+                    risk_blocked = True
+
+            if risk_blocked:
                 continue
 
             price = get_latest_price(cur, market_id)
@@ -225,6 +265,8 @@ def run():
         print(f"  └─ Skipped (duplicate):{skipped_duplicate}")
         print(f"  └─ Skipped (max pos):  {skipped_max_positions}")
         print(f"  └─ Skipped (low conf): {skipped_low_confidence}")
+        print(f"  └─ Skipped (risk):     {skipped_risk_block}")
+        print(f"  └─ Skipped (theme):    {skipped_theme_block}")
         print(f"Opened:                  {opened}")
         print(f"Balance: cash={balance[0]}, equity={balance[1]}, pnl={balance[2]}, roi={balance[3]}")
 
@@ -235,6 +277,8 @@ def run():
             "skipped_duplicate": skipped_duplicate,
             "skipped_max_positions": skipped_max_positions,
             "skipped_low_confidence": skipped_low_confidence,
+            "skipped_risk_block": skipped_risk_block,
+            "skipped_theme_block": skipped_theme_block,
             "opened": opened,
             "errors": 0,
         }
