@@ -48,6 +48,7 @@ def run(limit=20):
         news_score = f(fj.get("news_score"))
         news_count = int(fj.get("news_count", 0))
         orderbook_imbalance = f(fj.get("orderbook_imbalance"))
+        spread = f(fj.get("spread", fj.get("best_ask", 0)) - fj.get("best_bid", 0))
         volatility_30 = f(fj.get("volatility_30_snapshots"))
         liquidity = f(fj.get("liquidity"))
         volume = f(fj.get("volume"))
@@ -61,9 +62,11 @@ def run(limit=20):
             "news_score": news_score,
             "news_count": news_count,
             "orderbook_imbalance": orderbook_imbalance,
+            "spread": spread,
             "volatility_30_snapshots": volatility_30,
             "liquidity": liquidity,
             "volume": volume,
+            "has_signal": has_signal,
         })
 
     if not raw:
