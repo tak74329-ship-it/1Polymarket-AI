@@ -1,11 +1,13 @@
 import traceback
 import psycopg2
+from psycopg2.extras import Json
 from backend.utils.config import DB_CONFIG
 
 START_CASH = 10000
 TRADE_AMOUNT = 100
 TAKE_PROFIT = 0.20
 STOP_LOSS = -0.08
+MAX_OPEN_POSITIONS = 5
 
 
 def f(v):
@@ -31,6 +33,20 @@ def ensure_balance(cur):
             INSERT INTO paper_balance (cash, equity, pnl, roi)
             VALUES (%s, %s, 0, 0)
         """, (START_CASH, START_CASH))
+
+
+def count_open_positions(cur):
+    cur.execute("SELECT COUNT(*) FROM paper_positions WHERE status='OPEN'")
+    return cur.fetchone()[0]
+
+
+def already_open(cur, market_id):
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM paper_positions
+        WHERE market_id=%s AND status='OPEN'
+    """, (market_id,))
+    return cur.fetchone()[0] > 0
 
 
 def open_position(cur, market_id, price, reason):
@@ -90,25 +106,16 @@ def close_position(cur, position_id, market_id, price, qty, invested, reason):
     """, (amount, pnl, amount, pnl, START_CASH))
 
 
-def already_open(cur, market_id):
-    cur.execute("""
-        SELECT COUNT(*)
-        FROM paper_positions
-        WHERE market_id=%s AND status='OPEN'
-    """, (market_id,))
-    return cur.fetchone()[0] > 0
-
-
 def run():
     try:
-        print("▶️ Running Paper Trader V1...")
+        print("▶️ Running Paper Trader V2 (AI action-based)...")
 
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
 
         ensure_balance(cur)
 
-        # 1. 先检查持仓是否止盈/止损
+        # ── 1. Check open positions: take profit / stop loss ──────────
         cur.execute("""
             SELECT id, market_id, entry_price, qty, invested
             FROM paper_positions
@@ -135,10 +142,14 @@ def run():
                 close_position(cur, pid, market_id, price, qty, invested, "STOP_LOSS")
                 closed += 1
 
-        # 2. 再根据最新 AI 分析开新仓
+        # ── 2. Open new positions from AI V2 BUY signals ──────────────
         cur.execute("""
             SELECT DISTINCT ON (a.market_id)
-                a.market_id, a.ai_probability, a.confidence, m.liquidity
+                a.market_id,
+                a.ai_probability,
+                a.confidence,
+                a.raw->'analysis'->>'action' AS ai_action,
+                a.reason
             FROM ai_analysis a
             JOIN markets m ON m.market_id = a.market_id
             WHERE m.active = true
@@ -149,29 +160,48 @@ def run():
 
         rows = cur.fetchall()
 
+        # Count current open positions
+        current_open = count_open_positions(cur)
+
+        # Stats
+        ai_buy_count = 0
+        skipped_not_buy = 0
+        skipped_duplicate = 0
+        skipped_max_positions = 0
+        skipped_low_confidence = 0
         opened = 0
 
-        for market_id, probability, confidence, liquidity in rows:
+        for market_id, probability, confidence, ai_action, reason in rows:
             probability = f(probability)
             confidence = f(confidence)
 
-            if probability < 65 or confidence < 60:
+            # Primary gate: AI action must be BUY
+            if ai_action != "BUY":
+                skipped_not_buy += 1
                 continue
 
+            ai_buy_count += 1
+
+            # Secondary gate: confidence sanity check
+            if confidence < 60 or probability < 50:
+                skipped_low_confidence += 1
+                continue
+
+            # No duplicate positions
             if already_open(cur, market_id):
+                skipped_duplicate += 1
+                continue
+
+            # Max positions cap
+            if current_open + opened >= MAX_OPEN_POSITIONS:
+                skipped_max_positions += 1
                 continue
 
             price = get_latest_price(cur, market_id)
             if price is None or price <= 0.05 or price >= 0.95:
                 continue
 
-            ok = open_position(
-                cur,
-                market_id,
-                price,
-                f"AI probability={probability}, confidence={confidence}"
-            )
-
+            ok = open_position(cur, market_id, price, reason)
             if ok:
                 opened += 1
 
@@ -188,15 +218,29 @@ def run():
         cur.close()
         conn.close()
 
-        print("✅ Paper Trader Finished")
-        print(f"Opened: {opened}")
-        print(f"Closed: {closed}")
+        print("✅ Paper Trader V2 Finished")
+        print(f"Closed (TP/SL):          {closed}")
+        print(f"AI BUY signals found:    {ai_buy_count}")
+        print(f"  └─ Skipped (not BUY):  {skipped_not_buy}")
+        print(f"  └─ Skipped (duplicate):{skipped_duplicate}")
+        print(f"  └─ Skipped (max pos):  {skipped_max_positions}")
+        print(f"  └─ Skipped (low conf): {skipped_low_confidence}")
+        print(f"Opened:                  {opened}")
         print(f"Balance: cash={balance[0]}, equity={balance[1]}, pnl={balance[2]}, roi={balance[3]}")
 
-        return {"opened": opened, "closed": closed, "errors": 0}
+        return {
+            "closed": closed,
+            "ai_buy_count": ai_buy_count,
+            "skipped_not_buy": skipped_not_buy,
+            "skipped_duplicate": skipped_duplicate,
+            "skipped_max_positions": skipped_max_positions,
+            "skipped_low_confidence": skipped_low_confidence,
+            "opened": opened,
+            "errors": 0,
+        }
 
     except Exception:
-        print("❌ Paper Trader Failed")
+        print("❌ Paper Trader V2 Failed")
         traceback.print_exc()
         return {"errors": 1}
 
